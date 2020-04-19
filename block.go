@@ -573,7 +573,7 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 	i, size := 0, 0
 
 	// skip up to three spaces
-	for i < len(data) && i < 3 && data[i] == ' ' {
+	for i < len(data) && i < 3 && (data[i] == ' ' || data[i] == '\t') {
 		i++
 	}
 

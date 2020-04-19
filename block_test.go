@@ -1854,6 +1854,21 @@ func TestIsFenceLine(t *testing.T) {
 			wantMarker:    "```",
 			wantInfo:      "go foo bar",
 		},
+
+		{
+			data: []byte("	 ```"),
+			infoRequested: true,
+			wantEnd:       5,
+			wantMarker:    "```",
+			wantInfo:      "",
+		},
+		{
+			data: []byte("	 ```C"),
+			infoRequested: true,
+			wantEnd:       6,
+			wantMarker:    "```",
+			wantInfo:      "C",
+		},
 	}
 
 	for _, test := range tests {
