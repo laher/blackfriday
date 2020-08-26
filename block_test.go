@@ -1589,9 +1589,17 @@ func TestListWithFencedCodeBlock(t *testing.T) {
 	var tests = []string{
 		"1. one\n\n    ```\n    code\n    ```\n\n2. two\n",
 		"<ol>\n<li><p>one</p>\n\n<pre><code>code\n</code></pre></li>\n\n<li><p>two</p></li>\n</ol>\n",
+		"1. one\n\n    ```C\n    code\n    ```\n\n2. two\n",
+		"<ol>\n<li><p>one</p>\n\n<pre><code class=\"language-C\">code\n</code></pre>\n</li>\n\n<li><p>two</p></li>\n</ol>\n",
 		// https://github.com/russross/blackfriday/issues/239
 		"1. one\n\n    ```\n    - code\n    ```\n\n2. two\n",
 		"<ol>\n<li><p>one</p>\n\n<pre><code>- code\n</code></pre></li>\n\n<li><p>two</p></li>\n</ol>\n",
+		"# first header\n\n 1. one\n\n\t- for example\n\t ```\n\t - code\n\t```\n\n# second header",
+		"<h1>first header</h1>\n\n<ol>\n<li><p>one</p>\n\n<ul>\n<li>for example\n<code>\n- code\n</code></li>\n</ul></li>\n</ol>\n\n<h1>second header</h1>\n",
+		"# first header\n\n 1. one\n\n\t- for example\n\t ``` C\n\t - code\n\t```\n\n# second header",
+		"<h1>first header</h1>\n\n<ol>\n<li><p>one</p>\n\n<ul>\n<li>for example\n<code>\n- code\n</code></li>\n</ul></li>\n</ol>\n\n<h1>second header</h1>\n",
+		"# first header\n\n 1. one\n\n - for example\n  ``` C\n  - code\n  ```\n\n# second header",
+		"<h1>first header</h1>\n\n<ol>\n<li><p>one</p>\n\n<ul>\n<li>for example\n<code>\n- code\n</code></li>\n</ul></li>\n</ol>\n\n<h1>second header</h1>\n",
 	}
 	doTestsBlock(t, tests, FencedCode)
 }
@@ -1856,14 +1864,14 @@ func TestIsFenceLine(t *testing.T) {
 		},
 
 		{
-			data: []byte("	 ```"),
+			data:          []byte("\t ```"),
 			infoRequested: true,
 			wantEnd:       5,
 			wantMarker:    "```",
 			wantInfo:      "",
 		},
 		{
-			data: []byte("	 ```C"),
+			data:          []byte("\t ```C"),
 			infoRequested: true,
 			wantEnd:       6,
 			wantMarker:    "```",
@@ -1876,7 +1884,12 @@ func TestIsFenceLine(t *testing.T) {
 		if test.infoRequested {
 			info = new(string)
 		}
-		end, marker := isFenceLine(test.data, info, "```")
+		end, marker, err := isFenceLine(test.data, info, "```")
+		if err != nil {
+			if err.Error() != "wrong fence character" {
+				t.Logf("returned error: %v", err)
+			}
+		}
 		if got, want := end, test.wantEnd; got != want {
 			t.Errorf("got end %v, want %v", got, want)
 		}

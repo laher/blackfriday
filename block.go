@@ -15,6 +15,7 @@ package blackfriday
 
 import (
 	"bytes"
+	"errors"
 	"html"
 	"regexp"
 	"strings"
@@ -569,7 +570,7 @@ func (*Markdown) isHRule(data []byte) bool {
 // isFenceLine checks if there's a fence line (e.g., ``` or ``` go) at the beginning of data,
 // and returns the end index if so, or 0 otherwise. It also returns the marker found.
 // If info is not nil, it gets set to the syntax specified in the fence line.
-func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker string) {
+func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker string, err error) {
 	i, size := 0, 0
 
 	// skip up to three spaces
@@ -579,10 +580,10 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 
 	// check for the marker characters: ~ or `
 	if i >= len(data) {
-		return 0, ""
+		return 0, "", errors.New("beyond data size")
 	}
 	if data[i] != '~' && data[i] != '`' {
-		return 0, ""
+		return 0, "", errors.New("wrong fence character")
 	}
 
 	c := data[i]
@@ -595,13 +596,13 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 
 	// the marker char must occur at least 3 times
 	if size < 3 {
-		return 0, ""
+		return 0, "", errors.New("fence marker too short")
 	}
 	marker = string(data[i-size : i])
 
 	// if this is the end marker, it must match the beginning marker
 	if oldmarker != "" && marker != oldmarker {
-		return 0, ""
+		return 0, "", errors.New("non-matching marker")
 	}
 
 	// TODO(shurcooL): It's probably a good idea to simplify the 2 code paths here
@@ -612,9 +613,9 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 
 		if i >= len(data) {
 			if i == len(data) {
-				return i, marker
+				return i, marker, nil
 			}
-			return 0, ""
+			return 0, "", errors.New("beyond data size")
 		}
 
 		infoStart := i
@@ -629,7 +630,7 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 			}
 
 			if i >= len(data) || data[i] != '}' {
-				return 0, ""
+				return 0, "", errors.New("no closing brace in marker info")
 			}
 
 			// strip all whitespace at the beginning and the end
@@ -655,12 +656,12 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 	}
 
 	if i == len(data) {
-		return i, marker
+		return i, marker, nil
 	}
 	if i > len(data) || data[i] != '\n' {
-		return 0, ""
+		return 0, "", errors.New("expected newline")
 	}
-	return i + 1, marker // Take newline into account.
+	return i + 1, marker, nil // Take newline into account.
 }
 
 // fencedCodeBlock returns the end index if data contains a fenced code block at the beginning,
@@ -668,7 +669,11 @@ func isFenceLine(data []byte, info *string, oldmarker string) (end int, marker s
 // If doRender is true, a final newline is mandatory to recognize the fenced code block.
 func (p *Markdown) fencedCodeBlock(data []byte, doRender bool) int {
 	var info string
-	beg, marker := isFenceLine(data, &info, "")
+	beg, marker, err := isFenceLine(data, &info, "")
+	if err != nil {
+		//log.Printf("not fence line (start): %v\n", err)
+		return 0
+	}
 	if beg == 0 || beg >= len(data) {
 		return 0
 	}
@@ -682,7 +687,10 @@ func (p *Markdown) fencedCodeBlock(data []byte, doRender bool) int {
 		// safe to assume beg < len(data)
 
 		// check for the end of the code block
-		fenceEnd, _ := isFenceLine(data[beg:], nil, marker)
+		fenceEnd, _, err := isFenceLine(data[beg:], nil, marker)
+		if err != nil {
+			//log.Printf("not fence line (end): %v\n", err)
+		}
 		if fenceEnd != 0 {
 			beg += fenceEnd
 			break
@@ -1296,7 +1304,11 @@ gatherlines:
 		if p.extensions&FencedCode != 0 {
 			// determine if in or out of codeblock
 			// if in codeblock, ignore normal list processing
-			_, marker := isFenceLine(chunk, nil, codeBlockMarker)
+			_, marker, err := isFenceLine(chunk, nil, codeBlockMarker)
+			if err != nil {
+
+				//log.Printf("not a fence line: %v", err)
+			}
 			if marker != "" {
 				if codeBlockMarker == "" {
 					// start of codeblock
